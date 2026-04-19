@@ -1,0 +1,1146 @@
+                                                                                          <!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Учёт паллет</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: #f5f6f8;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 12px;
+      gap: 16px;
+    }
+
+    h1 { font-size: 12px; color: #bbb; letter-spacing: 1px; }
+
+    /* ===== ОБЁРТКА ===== */
+    .calc-wrapper {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      width: 100%;
+      max-width: 560px;
+    }
+
+    /* ===== КАЛЬКУЛЯТОР ===== */
+    .calculator {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 16px;
+      flex: 1;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      min-width: 0;
+    }
+
+    .top-inputs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .city-wrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .city-input, .date-input {
+      background: #f5f6f8;
+      border: 1.5px solid #e8e8f0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 15px;
+      color: #1a1a2e;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      width: 100%;
+    }
+    .city-input { padding-right: 58px; }
+    .city-input::placeholder { color: #bbb; }
+    .city-input:focus, .date-input:focus { border-color: #e8306a; }
+    .city-input.filled { border-color: #22a84a; background: #f0faf3; }
+
+    .city-check {
+      position: absolute; right: 34px;
+      font-size: 16px; color: #22a84a;
+      opacity: 0; transition: opacity 0.2s;
+      pointer-events: none; line-height: 1;
+    }
+    .city-check.visible { opacity: 1; }
+
+    .city-arrow {
+      position: absolute; right: 8px;
+      background: none; border: none;
+      font-size: 11px; color: #bbb;
+      cursor: pointer; padding: 6px 4px;
+      line-height: 1; border-radius: 4px;
+    }
+    .city-arrow:hover { color: #1a1a2e; }
+
+    .city-dropdown {
+      display: none;
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #fff; border: 1.5px solid #e8e8f0;
+      border-radius: 10px; z-index: 999;
+      max-height: 220px; overflow-y: auto;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .city-dropdown.open { display: block; }
+    .city-option {
+      padding: 9px 14px; font-size: 14px; color: #1a1a2e;
+      cursor: pointer; border-bottom: 1px solid #f5f5f5;
+      transition: background 0.1s;
+    }
+    .city-option:last-child { border-bottom: none; }
+    .city-option:hover, .city-option.highlighted { background: #fff0f4; color: #e8306a; }
+    .city-no-match { padding: 9px 14px; font-size: 13px; color: #bbb; }
+
+    .date-input { width: 140px; flex-shrink: 0; }
+
+    /* ===== ДИСПЛЕЙ ===== */
+    .display {
+      background: #ffffff;
+      border: 1.5px solid #e8e8f0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      text-align: right;
+      min-height: 64px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+
+    .display .expression {
+      color: #bbb;
+      font-size: 11px;
+      min-height: 16px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-bottom: 2px;
+    }
+
+    .display .result {
+      color: #1a1a2e;
+      font-size: 30px;
+      font-weight: 400;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ===== КНОПКИ — только цифры, +, − ===== */
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: 500;
+      padding: 16px 8px;
+      cursor: pointer;
+      transition: all 0.1s ease;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    button:active { transform: scale(0.93); }
+
+    .btn-num  { background: #f5f6f8; color: #1a1a2e; border: 1.5px solid #e8e8f0; }
+    .btn-num:hover  { background: #edeef2; }
+    .btn-op   { background: #f0f0f8; color: #5050a0; border: 1.5px solid #e0e0f0; font-size: 22px; }
+    .btn-op:hover   { background: #e5e5f5; }
+    .btn-eq   { background: #e8306a; color: white; border: 1.5px solid #e8306a; }
+    .btn-eq:hover   { background: #d02060; }
+    .btn-ac   { background: #fff0f4; color: #e8306a; border: 1.5px solid #fcd0dd; font-size: 15px; }
+    .btn-ac:hover   { background: #ffe0ea; }
+    .btn-back { background: #f5f6f8; color: #e8306a; border: 1.5px solid #e8e8f0; font-size: 16px; }
+    .btn-back:hover { background: #edeef2; }
+    .span2 { grid-column: span 2; }
+    .span3 { grid-column: span 3; }
+
+    /* ===== МИНИ ===== */
+    .mini-calc {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 16px 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      width: 110px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      text-align: center;
+    }
+
+    .mini-label { font-size: 10px; color: #bbb; text-transform: uppercase; letter-spacing: 0.5px; }
+    .pallet-count { font-size: 46px; font-weight: 700; color: #1a1a2e; line-height: 1; }
+    .pallet-word  { font-size: 12px; color: #aaa; }
+    .divider { width: 36px; height: 1px; background: #e8e8f0; margin: 4px 0; }
+    .total-label { font-size: 10px; color: #bbb; text-transform: uppercase; letter-spacing: 0.5px; }
+    .total-kg { font-size: 15px; font-weight: 700; color: #e8306a; }
+
+    .btn-add {
+      width: 100%;
+      padding: 10px 6px;
+      background: #e8306a;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s, transform 0.1s;
+      touch-action: manipulation;
+    }
+    .btn-add:hover  { background: #d02060; }
+    .btn-add:active { transform: scale(0.97); }
+
+    .mode-toggle {
+      display: flex; gap: 6px; margin-top: 8px; width: 100%;
+    }
+    .mode-btn {
+      flex: 1; padding: 8px 4px;
+      border: 1.5px solid #e8e8f0; border-radius: 8px;
+      background: #f5f6f8; color: #aaa;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .mode-btn.active {
+      background: #1a1a2e; color: #fff; border-color: #1a1a2e;
+    }
+
+    /* ===== СПИСОК ===== */
+    .list-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 16px 20px;
+      width: 100%;
+      max-width: 560px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    .list-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+
+    .list-top h2 {
+      font-size: 12px; color: #aaa;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      font-weight: 500; flex: 1;
+    }
+
+    .btn-share {
+      background: #3a7abd; color: white; border: none;
+      border-radius: 8px; padding: 6px 12px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background 0.2s; position: relative;
+    }
+    .btn-share:hover { background: #2d60a0; }
+
+    /* ===== SHARE POPUP ===== */
+    .share-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .share-overlay.open { display: flex; }
+
+    .share-sheet {
+      background: #fff;
+      border-radius: 20px 20px 0 0;
+      padding: 20px 20px 32px;
+      width: 100%; max-width: 560px;
+      box-shadow: 0 -4px 32px rgba(0,0,0,0.15);
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+
+    .share-title {
+      font-size: 13px; color: #aaa;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 16px; text-align: center;
+    }
+
+    .share-buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .share-btn {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+      padding: 12px 4px;
+      border-radius: 12px; border: none;
+      cursor: pointer; font-size: 11px;
+      font-weight: 600; color: #1a1a2e;
+      background: #f5f6f8;
+      transition: background 0.15s;
+      text-decoration: none;
+    }
+    .share-btn:hover { background: #edeef2; }
+    .share-btn .icon { font-size: 28px; line-height: 1; }
+
+    .share-btn-wa   { color: #25d366; }
+    .share-btn-tg   { color: #2aabee; }
+    .share-btn-max  { color: #ff6b00; }
+    .share-btn-copy { color: #888; }
+
+    .btn-share-cancel {
+      width: 100%; padding: 13px;
+      border: none; border-radius: 12px;
+      background: #f5f6f8; color: #e8306a;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-share-cancel:hover { background: #ffe0ea; }
+
+    .btn-excel {
+      background: #1a7a3a; color: white; border: none;
+      border-radius: 8px; padding: 6px 12px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-excel:hover { background: #155f2d; }
+
+    .btn-clear {
+      background: none; border: 1.5px solid #fcd0dd;
+      color: #e8306a; border-radius: 8px;
+      padding: 4px 10px; font-size: 12px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-clear:hover { background: #fff0f4; }
+
+    .empty { color: #ccc; font-size: 13px; text-align: center; padding: 16px 0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+    thead th {
+      color: #aaa; font-weight: 400; font-size: 10px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 0 6px 8px 0; text-align: left;
+    }
+    thead th.th-right { text-align: right; padding-right: 0; }
+
+    tbody tr { border-top: 1px solid #f0f0f5; }
+    tbody tr:hover { background: #fafafa; }
+    tbody td { padding: 9px 6px 9px 0; color: #1a1a2e; }
+
+    .td-date { color: #aaa; font-size: 12px; white-space: nowrap; }
+    .td-city { font-weight: 600; }
+    .td-pal  { color: #7070b0; white-space: nowrap; }
+    .td-kg   { color: #e8306a; font-weight: 700; text-align: right; white-space: nowrap; }
+
+    .td-actions { white-space: nowrap; }
+    .td-actions button {
+      background: none; border: none;
+      font-size: 15px; cursor: pointer; padding: 0 0 0 6px;
+      transition: color 0.2s;
+    }
+    .btn-edit-row { color: #bbb; }
+    .btn-edit-row:hover { color: #3a7abd; }
+    .btn-del-row  { color: #ddd; }
+    .btn-del-row:hover  { color: #e8306a; }
+
+    /* ===== МОДАЛ РЕДАКТИРОВАНИЯ ===== */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4); z-index: 200;
+      align-items: center; justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 16px;
+      padding: 24px; width: 100%; max-width: 360px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+    }
+    .modal h3 {
+      font-size: 15px; font-weight: 600; color: #1a1a2e;
+      margin-bottom: 16px;
+    }
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label {
+      display: block; font-size: 11px; color: #aaa;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .modal-field input {
+      width: 100%; background: #f5f6f8; border: 1.5px solid #e8e8f0;
+      border-radius: 10px; padding: 10px 14px; font-size: 15px;
+      color: #1a1a2e; outline: none; font-family: 'Segoe UI', Arial, sans-serif;
+      transition: border-color 0.2s;
+    }
+    .modal-field input:focus { border-color: #e8306a; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .btn-modal-save {
+      flex: 1; padding: 12px; background: #e8306a; color: white;
+      border: none; border-radius: 10px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-modal-save:hover { background: #d02060; }
+    .btn-modal-cancel {
+      flex: 1; padding: 12px; background: #f5f6f8; color: #1a1a2e;
+      border: none; border-radius: 10px; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-modal-cancel:hover { background: #edeef2; }
+
+    tfoot td { padding-top: 10px; border-top: 2px solid #e8e8f0; font-size: 12px; color: #aaa; }
+    .tf-label { font-weight: 600; color: #1a1a2e; }
+    .tf-pal   { color: #7070b0; white-space: nowrap; }
+    .tf-total { font-weight: 700; color: #e8306a; font-size: 15px; text-align: right; }
+
+    /* ===== МОБАЙЛ ===== */
+    @media (max-width: 480px) {
+      body { padding: 16px 10px; gap: 12px; }
+
+      .calc-wrapper { gap: 10px; }
+
+      .calculator { padding: 14px; border-radius: 14px; }
+
+      .top-inputs { flex-direction: column; gap: 8px; }
+      .date-input { width: 100%; }
+
+      .display { min-height: 58px; padding: 10px 12px; }
+      .display .result { font-size: 26px; }
+
+      button { padding: 18px 8px; font-size: 20px; }
+      .btn-ac, .btn-back { font-size: 15px; }
+
+      .mini-calc {
+        width: 90px;
+        padding: 14px 8px;
+        border-radius: 14px;
+      }
+      .pallet-count { font-size: 38px; }
+      .total-kg { font-size: 13px; }
+      .btn-add { font-size: 11px; padding: 9px 4px; }
+
+      .list-card { padding: 14px 14px; border-radius: 14px; }
+
+      table { font-size: 12px; }
+      tbody td { padding: 8px 4px 8px 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>вроде работает базару нет</h1>
+
+  <div class="calc-wrapper">
+    <div class="calculator">
+      <div class="top-inputs">
+        <div class="city-wrap">
+          <input class="city-input" id="city" type="text" placeholder="Направление..."
+            oninput="onCityInput()" onkeydown="onCityKey(event)" autocomplete="off" />
+          <span class="city-check" id="cityCheck">✓</span>
+          <button class="city-arrow" type="button" onclick="toggleDropdown()" tabindex="-1">▼</button>
+          <div class="city-dropdown" id="cityDropdown"></div>
+        </div>
+        <input class="date-input" id="date" type="date" onchange="onDateChange()" />
+      </div>
+
+      <div class="display">
+        <div class="expression" id="expression"></div>
+        <div class="result" id="result">0</div>
+      </div>
+
+      <div class="buttons">
+        <!-- Ряд 1: AC, ⌫, + -->
+        <button class="btn-ac"   onclick="clearAll()">AC</button>
+        <button class="btn-back" onclick="backspace()">⌫</button>
+        <button class="btn-op"   onclick="inputOp('+')">+</button>
+
+        <!-- Ряд 2: 7 8 9 -->
+        <button class="btn-num" onclick="inputDigit('7')">7</button>
+        <button class="btn-num" onclick="inputDigit('8')">8</button>
+        <button class="btn-num" onclick="inputDigit('9')">9</button>
+
+        <!-- Ряд 3: 4 5 6 -->
+        <button class="btn-num" onclick="inputDigit('4')">4</button>
+        <button class="btn-num" onclick="inputDigit('5')">5</button>
+        <button class="btn-num" onclick="inputDigit('6')">6</button>
+
+        <!-- Ряд 4: 1 2 3 -->
+        <button class="btn-num" onclick="inputDigit('1')">1</button>
+        <button class="btn-num" onclick="inputDigit('2')">2</button>
+        <button class="btn-num" onclick="inputDigit('3')">3</button>
+
+        <!-- Ряд 5: − 0 -->
+        <button class="btn-op"  onclick="inputOp('-')">−</button>
+        <button class="btn-num span2" onclick="inputDigit('0')">0</button>
+      </div>
+    </div>
+
+    <div class="mini-calc">
+      <div class="mini-label">паллет</div>
+      <div class="pallet-count" id="palletCount">—</div>
+      <div class="pallet-word">пал</div>
+      <div class="divider"></div>
+      <div class="total-label">итого</div>
+      <div class="total-kg" id="totalKg">— кг</div>
+      <button class="btn-add" onclick="addEntry()">+ В список</button>
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="modePal" onclick="setMode('пал')">пал</button>
+        <button class="mode-btn"        id="modeKor" onclick="setMode('кор')">кор</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share Sheet -->
+  <div class="share-overlay" id="shareOverlay" onclick="closeShare(event)">
+    <div class="share-sheet">
+      <div class="share-title">Поделиться файлом</div>
+      <div class="share-buttons">
+        <button class="share-btn" onclick="shareFileTo('whatsapp')">
+          <span class="icon share-btn-wa">💬</span>WhatsApp
+        </button>
+        <button class="share-btn" onclick="shareFileTo('telegram')">
+          <span class="icon share-btn-tg">✈️</span>Telegram
+        </button>
+        <button class="share-btn" onclick="shareFileTo('max')">
+          <span class="icon share-btn-max">⚡</span>Макс
+        </button>
+        <button class="share-btn" onclick="copyText()">
+          <span class="icon share-btn-copy">📋</span>Скопировать
+        </button>
+      </div>
+      <button class="btn-share-cancel" onclick="closeShareOverlay()">Отмена</button>
+    </div>
+  </div>
+
+  <!-- Модал редактирования -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <h3>Редактировать запись</h3>
+      <div class="modal-field">
+        <label>Дата</label>
+        <input type="date" id="editDate" />
+      </div>
+      <div class="modal-field">
+        <label>Город</label>
+        <input type="text" id="editCity" placeholder="Город" />
+      </div>
+      <div class="modal-field">
+        <label>Паллет</label>
+        <input type="number" id="editPallets" min="1" placeholder="1" />
+      </div>
+      <div class="modal-field">
+        <label>Вес (кг)</label>
+        <input type="number" id="editTotal" min="0" placeholder="354" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closeEditModal()">Отмена</button>
+        <button class="btn-modal-save" onclick="saveEdit()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="list-card">
+    <div class="list-top">
+      <h2>Список</h2>
+      <button class="btn-excel" onclick="downloadExcel()">&#8659; Excel</button>
+      <button class="btn-clear" onclick="clearEntries()">Очистить</button>
+    </div>
+    <div id="listWrap"><p class="empty">Пока пусто</p></div>
+  </div>
+
+  <script>
+    document.getElementById('date').valueAsDate = new Date();
+
+    let operands   = [];
+    let current    = '';
+    let lastOp     = '+';
+    let calculated = false;
+
+    const resultEl     = document.getElementById('result');
+    const expressionEl = document.getElementById('expression');
+    const palletEl     = document.getElementById('palletCount');
+    const totalKgEl    = document.getElementById('totalKg');
+
+    // ===== КОМБОБОКС НАПРАВЛЕНИЙ =====
+    // Общие для вт/чт/сб
+    const DIR_COMMON = [
+      'Владимир','Волгоград','Екатеринбург','Коледино',
+      'Краснодар','Невинномысск','Новосемейкино','Подольск','Рязань',
+      'Тула','Электросталь','ЯндексМаркет Софьино',
+      'OZON Адыгейск','OZON Гривно','OZON Домодедово',
+      'OZON Екатеринбург РФЦ Новый','OZON Жуковский','OZON Краснодар-2',
+      'OZON Невинномысск','OZON Нижний Новгород','OZON Нижний Новгород-2',
+      'OZON Петровское','OZON Самара','OZON Саратов'
+    ];
+    // Только вторник
+    const DIR_TUE = [...DIR_COMMON,
+      'Пенза','Сарапул','Шушары',
+      'OZON Пушкино-1','OZON СПБ Колпино','OZON СПБ Шушары'
+    ].sort((a,b) => a.localeCompare(b,'ru'));
+    // Четверг
+    const DIR_THU = [...DIR_COMMON, 'Сарапул'].sort((a,b) => a.localeCompare(b,'ru'));
+    // Суббота
+    const DIR_SAT = [...DIR_COMMON,
+      'Воронеж','Котовск','OZON Воронеж-2'
+    ].sort((a,b) => a.localeCompare(b,'ru'));
+
+    function getDirections() {
+      const dateStr = document.getElementById('date').value;
+      if (!dateStr) return DIR_TUE; // по умолчанию вторник
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const day = new Date(y, m - 1, d).getDay(); // 0=вс,1=пн,2=вт,3=ср,4=чт,5=пт,6=сб
+      if (day === 2) return DIR_TUE;
+      if (day === 4) return DIR_THU;
+      if (day === 6) return DIR_SAT;
+      return []; // не сборочный день
+    }
+
+    function onDateChange() {
+      const dirs = getDirections();
+      // Если выбранный город больше не доступен — очищаем
+      const cityVal = document.getElementById('city').value.trim();
+      if (cityVal && dirs.length && !dirs.includes(cityVal)) {
+        document.getElementById('city').value = '';
+        checkCity();
+      }
+      if (dropdownOpen) {
+        renderDropdown(dirs);
+      }
+    }
+
+    let dropdownOpen = false;
+    let highlightIdx = -1;
+
+    function checkCity() {
+      const val = document.getElementById('city').value.trim();
+      document.getElementById('city').classList.toggle('filled', val.length > 0);
+      document.getElementById('cityCheck').classList.toggle('visible', val.length > 0);
+    }
+
+    function renderDropdown(items) {
+      const dd = document.getElementById('cityDropdown');
+      const dirs = getDirections();
+      if (dirs.length === 0) {
+        dd.innerHTML = '<div class="city-no-match">⛔ Не сборочный день</div>';
+      } else if (!items.length) {
+        dd.innerHTML = '<div class="city-no-match">Не найдено</div>';
+      } else {
+        dd.innerHTML = items.map((d) =>
+          `<div class="city-option" data-val="${d}" onmousedown="selectCity('${d.replace(/'/g,"\\'")}')">
+            ${d}
+          </div>`
+        ).join('');
+      }
+      dd.classList.add('open');
+      dropdownOpen = true;
+      highlightIdx = -1;
+    }
+
+    function onCityInput() {
+      checkCity();
+      const dirs = getDirections();
+      const q = document.getElementById('city').value.trim().toLowerCase();
+      const filtered = q ? dirs.filter(d => d.toLowerCase().includes(q)) : dirs;
+      renderDropdown(filtered);
+    }
+
+    function toggleDropdown() {
+      if (dropdownOpen) {
+        closeDropdown();
+      } else {
+        renderDropdown(getDirections());
+        document.getElementById('city').focus();
+      }
+    }
+
+    function selectCity(val) {
+      document.getElementById('city').value = val;
+      checkCity();
+      closeDropdown();
+    }
+
+    function closeDropdown() {
+      document.getElementById('cityDropdown').classList.remove('open');
+      dropdownOpen = false;
+      highlightIdx = -1;
+    }
+
+    function onCityKey(e) {
+      const opts = document.querySelectorAll('#cityDropdown .city-option');
+      if (!dropdownOpen || !opts.length) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        highlightIdx = Math.min(highlightIdx + 1, opts.length - 1);
+        opts.forEach((o, i) => o.classList.toggle('highlighted', i === highlightIdx));
+        opts[highlightIdx]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        highlightIdx = Math.max(highlightIdx - 1, 0);
+        opts.forEach((o, i) => o.classList.toggle('highlighted', i === highlightIdx));
+        opts[highlightIdx]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && highlightIdx >= 0) {
+        e.preventDefault();
+        selectCity(opts[highlightIdx].dataset.val);
+      } else if (e.key === 'Escape') {
+        closeDropdown();
+      }
+    }
+
+    document.addEventListener('click', e => {
+      if (!document.querySelector('.city-wrap').contains(e.target)) closeDropdown();
+    });
+
+    function inputDigit(d) {
+      if (calculated) { clearAll(); calculated = false; }
+      if (current.length >= 6) return;
+      current += d;
+      updateDisplay();
+    }
+
+    function inputOp(op) {
+      if (current === '' && operands.length === 0) return;
+      if (current !== '') {
+        operands.push({ val: parseFloat(current) || 0, op: lastOp });
+        current = '';
+      }
+      lastOp = op;
+      calculated = false;
+      updateDisplay();
+    }
+
+    function calculate() {
+      // Мисклик: если уже посчитали и ничего нового не ввели — игнорируем
+      if (calculated) return;
+      // Мисклик: одно число без операции — игнорируем
+      if (operands.length === 0 && current !== '') return;
+      if (operands.length === 1 && current === '') return;
+      if (current !== '') {
+        operands.push({ val: parseFloat(current) || 0, op: lastOp });
+        current = '';
+      }
+      if (operands.length === 0) return;
+
+      let result = operands[0].val;
+      for (let i = 1; i < operands.length; i++) {
+        const { val, op } = operands[i];
+        if (op === '+') result += val;
+        else if (op === '-') result -= val;
+      }
+
+      result = parseFloat(result.toPrecision(10));
+      current = String(result);
+      calculated = true;
+      updateDisplay();
+    }
+
+    function clearAll() {
+      operands = []; current = ''; lastOp = '+'; calculated = false;
+      updateDisplay();
+    }
+
+    function backspace() {
+      if (calculated) return;
+      if (current !== '') {
+        current = current.slice(0, -1);
+      } else if (operands.length > 0) {
+        // шагаем назад: восстанавливаем последний операнд
+        const prev = operands.pop();
+        current = String(prev.val);
+        lastOp = prev.op;
+      }
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      const ops = { '+': '+', '-': '−' };
+      let expr = operands.map((o, i) => (i === 0 ? '' : ' ' + ops[o.op] + ' ') + o.val).join('');
+      if (current !== '' && operands.length > 0) expr += ' ' + ops[lastOp] + ' ' + current;
+      expressionEl.textContent = expr;
+
+      if (current !== '') {
+        resultEl.textContent = current;
+      } else if (operands.length > 0) {
+        let s = operands[0].val;
+        for (let i = 1; i < operands.length; i++) {
+          const { val, op } = operands[i];
+          if (op === '+') s += val;
+          else if (op === '-') s -= val;
+        }
+        resultEl.textContent = parseFloat(s.toPrecision(10));
+      } else {
+        resultEl.textContent = '0';
+      }
+
+      updateMini();
+    }
+
+    let mode = 'пал';
+
+    function setMode(m) {
+      mode = m;
+      document.getElementById('modePal').classList.toggle('active', m === 'пал');
+      document.getElementById('modeKor').classList.toggle('active', m === 'кор');
+      clearAll();
+    }
+
+    function updateMini() {
+      const empty = operands.length === 0 && current === '';
+
+      if (mode === 'пал') {
+        const pallets = operands.filter((o, i) => i === 0 || o.op === '+').length
+                      + (!calculated && current !== '' && (operands.length === 0 || lastOp === '+') ? 1 : 0);
+        const total = parseFloat(resultEl.textContent);
+
+        document.querySelector('.mini-label').textContent  = 'паллет';
+        document.querySelector('.pallet-word').textContent = 'пал';
+        document.querySelector('.divider').style.display      = '';
+        document.querySelector('.total-label').style.display  = '';
+        totalKgEl.style.display = '';
+
+        if (empty) { palletEl.textContent = '—'; totalKgEl.textContent = '— кг'; return; }
+        palletEl.textContent = pallets > 0 ? pallets : '—';
+        totalKgEl.textContent = (!isNaN(total) && total > 0) ? total.toLocaleString('ru') + ' кг' : '— кг';
+
+      } else {
+        // кор — считаем сумму как количество коробов
+        const total = parseFloat(resultEl.textContent);
+
+        document.querySelector('.mini-label').textContent  = 'коробов';
+        document.querySelector('.pallet-word').textContent = 'кор';
+        document.querySelector('.divider').style.display      = 'none';
+        document.querySelector('.total-label').style.display  = 'none';
+        totalKgEl.style.display = 'none';
+
+        if (empty) { palletEl.textContent = '—'; return; }
+        palletEl.textContent = (!isNaN(total) && total > 0) ? total : '—';
+      }
+    }
+
+    // ===== СПИСОК =====
+    let entries = JSON.parse(localStorage.getItem('pallet_entries') || '[]');
+    renderList();
+
+    function addEntry() {
+      const city = document.getElementById('city').value.trim();
+      const date = document.getElementById('date').value;
+      if (!city) { document.getElementById('city').focus(); return; }
+      if (!date) { alert('Выбери дату'); return; }
+
+      // Автоматически считаем перед добавлением
+      if (mode === 'пал') {
+        calculate();
+      } else {
+        // В режиме кор — финализируем текущий ввод без проверки на 2 числа
+        if (!calculated && current !== '') {
+          operands.push({ val: parseFloat(current) || 0, op: lastOp });
+          current = '';
+          let s = operands[0].val;
+          for (let i = 1; i < operands.length; i++) {
+            s = operands[i].op === '+' ? s + operands[i].val : s - operands[i].val;
+          }
+          s = parseFloat(s.toPrecision(10));
+          current = String(s);
+          calculated = true;
+          updateDisplay();
+        }
+      }
+
+      if (palletEl.textContent === '—') { alert('Введи данные в калькулятор'); return; }
+
+      const qty = parseFloat(palletEl.textContent);
+      if (isNaN(qty) || qty <= 0) { alert('Введи данные в калькулятор'); return; }
+
+      let pallets, total;
+      if (mode === 'пал') {
+        pallets = qty;
+        const totalStr = totalKgEl.textContent.replace(/\s*кг/, '').replace(/\s/g, '');
+        total = parseFloat(totalStr.replace(',', '.'));
+        if (!total || isNaN(total)) { alert('Введи хотя бы два числа'); return; }
+      } else {
+        pallets = qty;
+        total = 0;
+      }
+
+      const [y, m, d] = date.split('-');
+      entries.push({ date: `${d}.${m}.${y}`, city, pallets, total, type: mode });
+      localStorage.setItem('pallet_entries', JSON.stringify(entries));
+      renderList();
+
+      clearAll();
+      document.getElementById('city').value = '';
+      checkCity();
+      document.getElementById('city').focus();
+    }
+
+    function deleteEntry(i) {
+      entries.splice(i, 1);
+      localStorage.setItem('pallet_entries', JSON.stringify(entries));
+      renderList();
+    }
+
+    function clearEntries() {
+      if (!entries.length) return;
+      if (confirm('Очистить весь список?')) {
+        entries = [];
+        localStorage.setItem('pallet_entries', '[]');
+        renderList();
+      }
+    }
+
+    function renderList() {
+      const wrap = document.getElementById('listWrap');
+      if (!entries.length) { wrap.innerHTML = '<p class="empty">Пока пусто</p>'; return; }
+
+      const sumPal = entries.filter(e => (e.type || 'пал') === 'пал').reduce((s, e) => s + e.pallets, 0);
+      const sumKor = entries.filter(e => e.type === 'кор').reduce((s, e) => s + e.pallets, 0);
+      const sumKg  = entries.reduce((s, e) => s + e.total, 0);
+
+      wrap.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Дата</th><th>Город</th><th>Кол-во</th>
+              <th class="th-right">Вес</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map((e, i) => {
+              const t = e.type || 'пал';
+              const qtyLabel = `${e.pallets} ${t}`;
+              const weightLabel = t === 'пал' ? `${e.total.toLocaleString('ru')} кг` : '—';
+              return `<tr>
+                <td class="td-date">${e.date || '—'}</td>
+                <td class="td-city">${e.city}</td>
+                <td class="td-pal">${qtyLabel}</td>
+                <td class="td-kg">${weightLabel}</td>
+                <td class="td-actions">
+                  <button class="btn-edit-row" onclick="openEditModal(${i})">✏️</button>
+                  <button class="btn-del-row"  onclick="deleteEntry(${i})">×</button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td><td class="tf-label">Итого</td>
+              <td class="tf-pal">${sumPal ? sumPal + ' пал' : ''}${sumPal && sumKor ? ' / ' : ''}${sumKor ? sumKor + ' кор' : ''}</td>
+              <td class="tf-total">${sumKg ? sumKg.toLocaleString('ru') + ' кг' : '—'}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>`;
+    }
+
+    let editIndex = -1;
+
+    function openEditModal(i) {
+      editIndex = i;
+      const e = entries[i];
+      // дата из дд.мм.гггг в yyyy-mm-dd
+      if (e.date) {
+        const [d, m, y] = e.date.split('.');
+        document.getElementById('editDate').value = `${y}-${m}-${d}`;
+      } else {
+        document.getElementById('editDate').value = '';
+      }
+      document.getElementById('editCity').value = e.city;
+      document.getElementById('editPallets').value = e.pallets;
+      document.getElementById('editTotal').value = e.total;
+      document.getElementById('editModal').classList.add('open');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('open');
+      editIndex = -1;
+    }
+
+    function saveEdit() {
+      if (editIndex < 0) return;
+      const dateVal = document.getElementById('editDate').value;
+      const city    = document.getElementById('editCity').value.trim();
+      const pallets = parseInt(document.getElementById('editPallets').value);
+      const total   = parseFloat(document.getElementById('editTotal').value);
+
+      if (!city)              { alert('Введи город'); return; }
+      if (!pallets || pallets < 1) { alert('Введи количество паллет'); return; }
+      if (isNaN(total) || total < 0) { alert('Введи вес'); return; }
+
+      let dateDisplay = '';
+      if (dateVal) {
+        const [y, m, d] = dateVal.split('-');
+        dateDisplay = `${d}.${m}.${y}`;
+      }
+
+      entries[editIndex] = { date: dateDisplay, city, pallets, total };
+      localStorage.setItem('pallet_entries', JSON.stringify(entries));
+      renderList();
+      closeEditModal();
+    }
+
+    // Закрыть по клику вне модала
+    document.getElementById('editModal').addEventListener('click', function(e) {
+      if (e.target === this) closeEditModal();
+    });
+
+    function buildShareText() {
+      const sumPal = entries.reduce((s, e) => s + e.pallets, 0);
+      const sumKg  = entries.reduce((s, e) => s + e.total, 0);
+      return entries.map(e => `${e.date ? e.date + ' ' : ''}${e.city} ${e.pallets} пал ${e.total} кг`).join('\n')
+           + `\n\nИТОГО: ${sumPal} пал, ${sumKg} кг`;
+    }
+
+    function buildXlsxFile() {
+      const rows = entries.map(e => ({
+        'Дата':       e.date || '',
+        'Город':      e.city,
+        'Количество': `${e.pallets} ${e.type || 'пал'}`,
+        'Вес (кг)':   (e.type || 'пал') === 'пал' ? e.total : ''
+      }));
+      const sumPal = entries.filter(e => (e.type||'пал')==='пал').reduce((s,e)=>s+e.pallets,0);
+      const sumKor = entries.filter(e => e.type==='кор').reduce((s,e)=>s+e.pallets,0);
+      const sumKg  = entries.reduce((s,e)=>s+e.total,0);
+      const итогоQty = [sumPal ? sumPal+' пал' : '', sumKor ? sumKor+' кор' : ''].filter(Boolean).join(' / ');
+      rows.push({ 'Дата': '', 'Город': 'ИТОГО', 'Количество': итогоQty, 'Вес (кг)': sumKg || '' });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 12 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Паллеты');
+      const filename = `паллеты_${new Date().toLocaleDateString('ru').replace(/\./g, '-')}.xlsx`;
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      return new File([blob], filename, { type: blob.type });
+    }
+
+    function shareFile() {
+      if (!entries.length) { alert('Список пуст'); return; }
+      document.getElementById('shareOverlay').classList.add('open');
+    }
+
+    async function shareFileTo(app) {
+      closeShareOverlay();
+      const file = buildXlsxFile();
+
+      // Нативный шаринг файла — ОС откроет выбранное приложение
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Паллеты' });
+        } catch (e) {
+          if (e.name !== 'AbortError') {
+            // Шаринг не удался — скачиваем файл
+            downloadBlob(file);
+          }
+        }
+      } else {
+        // Браузер не поддерживает шаринг файлов — скачиваем
+        downloadBlob(file);
+      }
+    }
+
+    function downloadBlob(file) {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+    }
+
+    function closeShare(e) {
+      if (e.target === document.getElementById('shareOverlay')) closeShareOverlay();
+    }
+
+    function closeShareOverlay() {
+      document.getElementById('shareOverlay').classList.remove('open');
+    }
+
+    async function copyText() {
+      const text = buildShareText();
+      try {
+        await navigator.clipboard.writeText(text);
+        closeShareOverlay();
+        alert('Скопировано!');
+      } catch {
+        prompt('Скопируй вручную:', text);
+      }
+    }
+
+    function downloadExcel() {
+      if (!entries.length) { alert('Список пуст'); return; }
+      const rows = entries.map(e => ({
+        'Дата':       e.date || '',
+        'Город':      e.city,
+        'Количество': `${e.pallets} ${e.type || 'пал'}`,
+        'Вес (кг)':   (e.type || 'пал') === 'пал' ? e.total : ''
+      }));
+      const sumPal = entries.filter(e => (e.type||'пал')==='пал').reduce((s,e)=>s+e.pallets,0);
+      const sumKor = entries.filter(e => e.type==='кор').reduce((s,e)=>s+e.pallets,0);
+      const sumKg  = entries.reduce((s,e)=>s+e.total,0);
+      const итогоQty = [sumPal ? sumPal+' пал' : '', sumKor ? sumKor+' кор' : ''].filter(Boolean).join(' / ');
+      rows.push({ 'Дата': '', 'Город': 'ИТОГО', 'Количество': итогоQty, 'Вес (кг)': sumKg || '' });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 10 }, { wch: 12 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Паллеты');
+
+      const filename = `паллеты_${new Date().toLocaleDateString('ru').replace(/\./g, '-')}.xlsx`;
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        // iOS: открываем через data URL — пользователь сохраняет через "Поделиться"
+        const reader = new FileReader();
+        reader.onload = () => { window.location.href = reader.result; };
+        reader.readAsDataURL(blob);
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (document.getElementById('editModal').classList.contains('open')) return;
+      if (['city','date'].includes(document.activeElement.id)) return;
+      if (e.key >= '0' && e.key <= '9') inputDigit(e.key);
+      else if (e.key === '+') inputOp('+');
+      else if (e.key === '-') inputOp('-');
+      else if (e.key === 'Enter') { e.preventDefault(); addEntry(); }
+      else if (e.key === 'Escape') clearAll();
+      else if (e.key === 'Backspace') backspace();
+    });
+  </script>
+</body>
+</html>
